@@ -1,56 +1,48 @@
 import streamlit as st
 import yt_dlp
 import os
+import base64
 import tempfile
 
-# Function to download YouTube Shorts video
-def download_youtube_short(url, output_path):
+def download_youtube_video(url):
     try:
-        # yt-dlp options for downloading
+        # Decode cookies file from environment variable
+        cookies_base64 = os.getenv("YOUTUBE_COOKIES")
+        cookies_path = None
+
+        if cookies_base64:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as temp_file:
+                cookies_path = temp_file.name
+                temp_file.write(base64.b64decode(cookies_base64))
+
+        # yt-dlp options
         ydl_opts = {
-            "format": "mp4",  # Desired format (MP4)
-            "outtmpl": os.path.join(output_path, "%(title)s.%(ext)s"),  # Save video with title as filename
+            "format": "mp4",
+            "outtmpl": "%(title)s.%(ext)s",  # Save in the current directory
+            "cookies": cookies_path if cookies_path else None,  # Use cookies if provided
         }
 
-        # Use yt-dlp to download the video
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info_dict = ydl.extract_info(url, download=True)
-            title = info_dict.get("title", "Video")  # Get the title of the video
-
-            # Return the file path and title for success message
-            video_file_path = os.path.join(output_path, f"{title}.mp4")
-            return video_file_path, title
+            info = ydl.extract_info(url, download=True)
+            title = info.get("title", "Video")
+            return f"{title}.mp4", title
     except Exception as e:
         return None, str(e)
 
-# Streamlit App UI
-st.title("YouTube Shorts Downloader (yt-dlp)")
-st.write("Enter the URL of a YouTube Short to download it.")
+# Streamlit App
+st.title("YouTube Video Downloader")
+st.write("Enter a YouTube video URL to download.")
 
-# Input for YouTube Shorts URL
-url = st.text_input("YouTube Shorts URL:")
+url = st.text_input("YouTube Video URL:")
 
-# Button to trigger the download process
 if st.button("Download"):
     if url:
-        # Create a temporary directory for downloads
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            with st.spinner("Downloading..."):  # Show a spinner while downloading
-                # Call the download function
-                video_path, message = download_youtube_short(url, tmp_dir)
-
-            # Handle the response
-            if video_path:
-                st.success("Download complete!")  # Success message
-                # Provide a download button for the user
-                with open(video_path, "rb") as video_file:
-                    st.download_button(
-                        label="Download Video to Your Laptop", 
-                        data=video_file,
-                        file_name=os.path.basename(video_path),
-                        mime="video/mp4"
-                    )
-            else:
-                st.error(f"Error: {message}")  # Show error message if download fails
+        with st.spinner("Downloading video..."):
+            video_path, message = download_youtube_video(url)
+        if video_path:
+            st.success(f"Downloaded: {message}")
+            st.write("Video downloaded successfully.")
+        else:
+            st.error(f"Error: {message}")
     else:
-        st.warning("Please enter a valid URL.")  # Warning if no URL is provided
+        st.warning("Please enter a valid YouTube URL.")
